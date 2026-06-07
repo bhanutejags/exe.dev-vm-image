@@ -1,0 +1,32 @@
+version: 2
+
+updates:
+  # Keep the exeuntu base image in sync with upstream. Because the Dockerfile
+  # pins `FROM ghcr.io/boldsoftware/exeuntu:latest@sha256:...`, Dependabot opens
+  # a PR whenever upstream publishes a new digest for the :latest tag (they
+  # rebuild weekly for security fixes). Merging that PR triggers the
+  # build-publish workflow, which republishes our image on the new base.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+    commit-message:
+      prefix: "docker"
+    labels:
+      - dependencies
+      - base-image
+
+  # Keep the GitHub Actions used by the publish workflow up to date.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+    commit-message:
+      prefix: "ci"
+    labels:
+      - dependencies
+      - github-actions

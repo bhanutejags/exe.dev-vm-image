@@ -1,0 +1,87 @@
+name: Build & publish image
+
+# Builds the custom exe.dev image and pushes it to GitHub Container Registry.
+#
+# Triggers:
+#   - push to the default branch touching the image definition (e.g. a merged
+#     Dependabot PR bumping the exeuntu base digest) -> publish :latest
+#   - manual dispatch
+#   - weekly schedule -> rebuild so the GitHub-release tools baked in
+#     (jj/mise/chezmoi/zellij/yazi/btm, resolved at build time) stay fresh and
+#     we pick up any new layers from the pinned base.
+#   - pull requests -> build only (no push) as a smoke test
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".github/workflows/build-publish.yml"
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".github/workflows/build-publish.yml"
+  workflow_dispatch:
+  schedule:
+    # 07:00 UTC every Monday.
+    - cron: "0 7 * * 1"
+
+concurrency:
+  group: build-publish-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Don't push on pull_request events (forks can't write packages anyway).
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=long
+            type=schedule,pattern={{date 'YYYYMMDD'}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          # Pass the workflow token to the build so the in-Dockerfile GitHub API
+          # calls (resolving latest tool versions) aren't rate-limited. Mounted
+          # as a BuildKit secret, never written into an image layer.
+          secrets: |
+            github_token=${{ secrets.GITHUB_TOKEN }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
