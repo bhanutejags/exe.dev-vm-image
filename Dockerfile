@@ -150,9 +150,11 @@ curl -fsSL --retry 3 "${GH_AUTH[@]}" \
 install -m 0755 "${tmp}/eza" "${BINDIR}/eza"
 
 # --- starship (prompt) ---
+# starship only ships a musl build for aarch64 (no gnu), so use musl for both
+# arches — it's statically linked and runs everywhere.
 STARSHIP_VERSION="$(gh_latest starship/starship)"
 curl -fsSL --retry 3 "${GH_AUTH[@]}" \
-  "https://github.com/starship/starship/releases/download/v${STARSHIP_VERSION}/starship-${GNU_TRIPLE}.tar.gz" |
+  "https://github.com/starship/starship/releases/download/v${STARSHIP_VERSION}/starship-${RUST_MUSL}.tar.gz" |
   tar xz -C "${tmp}"
 install -m 0755 "${tmp}/starship" "${BINDIR}/starship"
 
