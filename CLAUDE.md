@@ -91,9 +91,6 @@ tags to `ghcr.io/bhanutejags/exe.dev-vm-image`:
 - weekly `schedule` → refresh latest-resolving tools
 - `pull_request` → build only (no push), as a smoke test
 
-Native arm runners are free for **public** repos; keep the repo public (or the
-arm leg will need a paid plan / self-hosted runner).
-
 After the first publish, make the GHCR package **public** (or create VMs with
 `--registry-auth USERNAME:PASSWORD`).
 
