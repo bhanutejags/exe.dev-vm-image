@@ -74,6 +74,18 @@ You can also trigger a build manually from the Actions tab (_Run workflow_).
 
 Pull requests run the build as a smoke test (no push).
 
+### Why native runners (not QEMU)
+
+Earlier the workflow built both arches on a single x86 runner and produced the
+`arm64` image via **QEMU** emulation (`docker/setup-qemu-action` + binfmt). Every
+instruction in the arm64 leg ran interpreted rather than native, so the apt
+installs and ~9 binary downloads were several times slower — builds took ~8+ min.
+
+Switching to a per-arch matrix on **native** runners (`ubuntu-24.04` +
+`ubuntu-24.04-arm`) dropped that to ~3 min (≈3× faster) and removed the QEMU
+setup step entirely. GitHub-hosted arm runners work on both public and private
+repos, so this doesn't constrain repo visibility.
+
 ### Re-pinning the base digest by hand
 
 ```bash
