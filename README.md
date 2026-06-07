@@ -10,19 +10,26 @@ running a setup script.
 Everything from the upstream `exeuntu` image (Ubuntu 24.04 + systemd, git, jq,
 ripgrep, neovim, gh, Go, uv, Docker, Claude Code, codex, pi, fd, Chrome,
 Tailscale, …) **plus** the tools I otherwise install on every VM via
-`scripts/setup-exedev.sh` in my dotfiles repo:
+`scripts/setup-exedev.sh` in my dotfiles repo, plus a few extra shell
+quality-of-life tools:
 
-| Tool            | Source                |
-| --------------- | --------------------- |
-| `zoxide`, `bat` | apt (Ubuntu universe) |
-| `btm` (bottom)  | GitHub release        |
-| `jj` (Jujutsu)  | GitHub release        |
-| `mise`          | GitHub release        |
-| `chezmoi`       | GitHub release        |
-| `zellij`        | GitHub release        |
-| `yazi` (+ `ya`) | GitHub release        |
+| Tool                      | Source                |
+| ------------------------- | --------------------- |
+| `zoxide`, `bat`           | apt (Ubuntu universe) |
+| `zsh`, `fzf`              | apt (Ubuntu universe) |
+| `btm` (bottom)            | GitHub release        |
+| `jj` (Jujutsu)            | GitHub release        |
+| `mise`                    | GitHub release        |
+| `chezmoi`                 | GitHub release        |
+| `zellij`                  | GitHub release        |
+| `yazi` (+ `ya`)           | GitHub release        |
+| `eza` (modern `ls`)       | GitHub release        |
+| `starship` (prompt)       | GitHub release        |
+| `nu` (nushell, secondary) | GitHub release        |
 
-Tools already provided by `exeuntu` are not duplicated. The GitHub-release
+`zsh` is installed but not forced as the login shell — the chezmoi dotfiles own
+that. `nu` is a secondary structured-data shell, not a login shell (it isn't
+POSIX). Tools already provided by `exeuntu` are not duplicated. The GitHub-release
 tools resolve their **latest** version at build time, so a rebuild always picks
 up the newest releases.
 

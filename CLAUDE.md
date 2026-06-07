@@ -38,8 +38,13 @@ inherited from `exeuntu`):
 The image should contain exactly the tools that `scripts/setup-exedev.sh` in the
 dotfiles repo installs, and **only those not already in `exeuntu`**. As of now:
 
-- apt: `zoxide`, `bat` (symlinked from `batcat`)
-- GitHub releases: `btm` (bottom), `jj`, `mise`, `chezmoi`, `zellij`, `yazi`+`ya`
+- apt: `zoxide`, `bat` (symlinked from `batcat`), `zsh`, `fzf`
+- GitHub releases: `btm` (bottom), `jj`, `mise`, `chezmoi`, `zellij`, `yazi`+`ya`,
+  `eza`, `starship`, `nu` (nushell)
+
+`zsh` is installed but not set as the login shell (the dotfiles own that via
+`chsh`/`.zshrc`). `nu` is a secondary structured-data shell, not a login shell
+(not POSIX) — don't `chsh` to it.
 
 Before adding a tool, check the upstream
 [`exeuntu` Dockerfile](https://github.com/boldsoftware/exeuntu/blob/main/Dockerfile)

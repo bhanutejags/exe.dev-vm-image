@@ -36,12 +36,15 @@ USER root
 SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
 
 # ---------------------------------------------------------------------------
-# 1. apt-installed tools: zoxide, bat
+# 1. apt-installed tools: zoxide, bat, zsh, fzf
 #    (bat installs the `batcat` binary on Debian/Ubuntu; we also symlink `bat`.)
+#    zsh is installed but NOT made the default login shell — the chezmoi
+#    dotfiles own that decision (chsh / .zshrc). nushell (added below) is a
+#    secondary shell, not a login shell, since it isn't POSIX.
 # ---------------------------------------------------------------------------
 RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get update && \
-    apt-get install -y --no-install-recommends zoxide bat && \
+    apt-get install -y --no-install-recommends zoxide bat zsh fzf && \
     ln -sf /usr/bin/batcat /usr/local/bin/bat && \
     rm -rf /var/lib/apt/lists/*
 
@@ -139,15 +142,42 @@ curl -fsSL --retry 3 "${GH_AUTH[@]}" \
   tar xz -C "${tmp}"
 install -m 0755 "${tmp}/btm" "${BINDIR}/btm"
 
+# --- eza (modern ls) ---
+EZA_VERSION="$(gh_latest eza-community/eza)"
+curl -fsSL --retry 3 "${GH_AUTH[@]}" \
+  "https://github.com/eza-community/eza/releases/download/v${EZA_VERSION}/eza_${GNU_TRIPLE}.tar.gz" |
+  tar xz -C "${tmp}"
+install -m 0755 "${tmp}/eza" "${BINDIR}/eza"
+
+# --- starship (prompt) ---
+STARSHIP_VERSION="$(gh_latest starship/starship)"
+curl -fsSL --retry 3 "${GH_AUTH[@]}" \
+  "https://github.com/starship/starship/releases/download/v${STARSHIP_VERSION}/starship-${GNU_TRIPLE}.tar.gz" |
+  tar xz -C "${tmp}"
+install -m 0755 "${tmp}/starship" "${BINDIR}/starship"
+
+# --- nushell (secondary structured-data shell) ---
+# Tags have no leading "v"; the tarball extracts into a versioned dir.
+NU_VERSION="$(gh_latest nushell/nushell)"
+curl -fsSL --retry 3 "${GH_AUTH[@]}" \
+  "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-${GNU_TRIPLE}.tar.gz" |
+  tar xz -C "${tmp}"
+install -m 0755 "${tmp}/nu-${NU_VERSION}-${GNU_TRIPLE}/nu" "${BINDIR}/nu"
+
 # Smoke-test everything we just installed.
 zoxide --version
 bat --version
+fzf --version
+zsh --version
 btm --version
 jj --version
 mise --version
 chezmoi --version
 zellij --version
 yazi --version
+eza --version
+starship --version
+nu --version
 EOF
 
 # Personal convention: projects live under ~/workspace. Create it up front,
