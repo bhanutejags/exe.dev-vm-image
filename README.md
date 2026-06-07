@@ -2,16 +2,14 @@
 
 A custom [exe.dev](https://exe.dev) VM image built on top of the upstream
 [`exeuntu`](https://github.com/boldsoftware/exeuntu) base image, with my usual
-developer tooling baked in so a freshly created VM is ready to go without
-running a setup script.
+developer tooling baked in so a freshly created VM is ready to go out of the
+box.
 
 ## What's in it
 
 Everything from the upstream `exeuntu` image (Ubuntu 24.04 + systemd, git, jq,
 ripgrep, neovim, gh, Go, uv, Docker, Claude Code, codex, pi, fd, Chrome,
-Tailscale, …) **plus** the tools I otherwise install on every VM via
-`scripts/setup-exedev.sh` in my dotfiles repo, plus a few extra shell
-quality-of-life tools:
+Tailscale, …) **plus** a handful of developer CLI tools:
 
 | Tool                      | Source                |
 | ------------------------- | --------------------- |
@@ -27,14 +25,13 @@ quality-of-life tools:
 | `starship` (prompt)       | GitHub release        |
 | `nu` (nushell, secondary) | GitHub release        |
 
-`zsh` is installed but not forced as the login shell — the chezmoi dotfiles own
-that. `nu` is a secondary structured-data shell, not a login shell (it isn't
-POSIX). Tools already provided by `exeuntu` are not duplicated. The GitHub-release
-tools resolve their **latest** version at build time, so a rebuild always picks
-up the newest releases.
+`zsh` is installed but not set as the default login shell. `nu` is a secondary
+structured-data shell, not a login shell (it isn't POSIX). Tools already
+provided by `exeuntu` are not duplicated. The GitHub-release tools resolve their
+**latest** version at build time, so a rebuild always picks up the newest
+releases.
 
-It also pre-creates `~/workspace` (owned by `exedev`) — the directory
-convention I use for checking out projects.
+It also pre-creates `~/workspace` (owned by `exedev`) for checking out projects.
 
 ## Using it
 
