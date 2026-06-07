@@ -1,28 +1,7 @@
 # syntax=docker/dockerfile:1
 
-# Custom exe.dev VM image.
-#
-# Built on top of boldsoftware's "exeuntu" base image (the default exe.dev
-# image). We layer on the developer tooling we install on every VM via
-# scripts/setup-exedev.sh in the dotfiles repo, so that a freshly created VM
-# already has them without running a setup script.
-#
-# Tools added (mirrors scripts/setup-exedev.sh in the dotfiles repo):
-#   - zoxide, bat            (apt, Ubuntu universe)
-#   - btm / bottom           (GitHub release — not reliably packaged for apt)
-#   - jj (Jujutsu)           (GitHub release)
-#   - mise                   (GitHub release)
-#   - chezmoi                (GitHub release)
-#   - zellij                 (GitHub release)
-#   - yazi (+ ya)            (GitHub release)
-#
-# Everything the base image already ships (git, jq, ripgrep, neovim, gh, go,
-# uv, docker, claude, codex, pi, fd, ...) is intentionally NOT duplicated here.
-#
-# The base image is pinned by digest so updates are explicit and reviewable.
-# Dependabot (.github/dependabot.yml) opens a PR whenever upstream publishes a
-# new digest, and the publish workflow rebuilds + pushes the result to GHCR.
-# Re-pin the digest manually with:
+# Custom exe.dev VM image: the exeuntu base plus extra developer CLI tools.
+# Base is pinned by digest; Dependabot bumps it. Re-pin by hand with:
 #   docker buildx imagetools inspect ghcr.io/boldsoftware/exeuntu:latest
 FROM ghcr.io/boldsoftware/exeuntu:latest@sha256:034721bc6e024074745d29588d7a287a2f8004d3476014bdd2f6b67fe4272aa6
 
