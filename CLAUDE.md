@@ -102,7 +102,3 @@ The `Dockerfile` is not prettier-formatted; keep it tidy by hand.
 - Validate YAML (`python3 -c "import yaml; yaml.safe_load(open(f))"`) and, when
   possible, do a local `docker buildx build` smoke test before pushing — CI is
   the real test since this environment may not have Docker.
-
-```
-
-```
