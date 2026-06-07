@@ -12,15 +12,15 @@ ripgrep, neovim, gh, Go, uv, Docker, Claude Code, codex, pi, fd, Chrome,
 Tailscale, …) **plus** the tools I otherwise install on every VM via
 `scripts/setup-exedev.sh` in my dotfiles repo:
 
-| Tool             | Source                |
-| ---------------- | --------------------- |
-| `zoxide`, `bat`  | apt (Ubuntu universe) |
-| `btm` (bottom)   | GitHub release        |
-| `jj` (Jujutsu)   | GitHub release        |
-| `mise`           | GitHub release        |
-| `chezmoi`        | GitHub release        |
-| `zellij`         | GitHub release        |
-| `yazi` (+ `ya`)  | GitHub release        |
+| Tool            | Source                |
+| --------------- | --------------------- |
+| `zoxide`, `bat` | apt (Ubuntu universe) |
+| `btm` (bottom)  | GitHub release        |
+| `jj` (Jujutsu)  | GitHub release        |
+| `mise`          | GitHub release        |
+| `chezmoi`       | GitHub release        |
+| `zellij`        | GitHub release        |
+| `yazi` (+ `ya`) | GitHub release        |
 
 Tools already provided by `exeuntu` are not duplicated. The GitHub-release
 tools resolve their **latest** version at build time, so a rebuild always picks
@@ -39,8 +39,8 @@ user (`LABEL exe.dev/login-user=exedev`) and the systemd `init` entrypoint
 (`CMD ["/usr/local/bin/init"]`) inherited from `exeuntu`.
 
 > The GHCR package must be **public** (or you must pass `--registry-auth
-> USERNAME:PASSWORD` to `ssh exe.dev new`) for exe.dev to pull it. Make it
-> public under the repo's *Packages* settings after the first publish.
+USERNAME:PASSWORD` to `ssh exe.dev new`) for exe.dev to pull it. Make it
+> public under the repo's _Packages_ settings after the first publish.
 
 ## How it stays in sync with upstream `exeuntu`
 
@@ -60,7 +60,7 @@ FROM ghcr.io/boldsoftware/exeuntu:latest@sha256:034721bc...
 
 A **weekly scheduled run** of the same workflow also rebuilds the image so the
 latest-resolving GitHub-release tools stay fresh even between base-image bumps.
-You can also trigger a build manually from the Actions tab (*Run workflow*).
+You can also trigger a build manually from the Actions tab (_Run workflow_).
 
 Pull requests run the build as a smoke test (no push).
 
