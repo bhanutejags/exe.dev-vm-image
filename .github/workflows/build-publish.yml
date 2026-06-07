@@ -2,13 +2,19 @@ name: Build & publish image
 
 # Builds the custom exe.dev image and pushes it to GitHub Container Registry.
 #
+# Each architecture is built on a NATIVE GitHub-hosted runner (amd64 on
+# ubuntu-24.04, arm64 on ubuntu-24.04-arm) — no QEMU emulation, so the arm64
+# leg is fast. Each leg pushes a single-arch image by digest; a final `merge`
+# job stitches the per-arch digests into a multi-arch manifest list and applies
+# the user-facing tags (:latest, :sha-..., dated).
+#
 # Triggers:
 #   - push to the default branch touching the image definition (e.g. a merged
 #     Dependabot PR bumping the exeuntu base digest) -> publish :latest
 #   - manual dispatch
 #   - weekly schedule -> rebuild so the GitHub-release tools baked in
-#     (jj/mise/chezmoi/zellij/yazi/btm, resolved at build time) stay fresh and
-#     we pick up any new layers from the pinned base.
+#     (jj/mise/chezmoi/zellij/yazi/btm/eza/starship/nu, resolved at build time)
+#     stay fresh and we pick up any new layers from the pinned base.
 #   - pull requests -> build only (no push) as a smoke test
 on:
   push:
@@ -35,16 +41,27 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: build (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
     permissions:
       contents: read
       packages: write
     steps:
+      - name: Prepare platform tag
+        run: |
+          platform="${{ matrix.platform }}"
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -58,7 +75,66 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Derive image metadata (tags + labels)
+      - name: Derive labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          # Pass the workflow token to the build so the in-Dockerfile GitHub API
+          # calls (resolving latest tool versions) aren't rate-limited. Mounted
+          # as a BuildKit secret, never written into an image layer.
+          secrets: |
+            github_token=${{ secrets.GITHUB_TOKEN }}
+          cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
+
+      - name: Export digest
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: merge manifests & push tags
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    needs: [build]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Derive tags
         id: meta
         uses: docker/metadata-action@v6
         with:
@@ -68,20 +144,21 @@ jobs:
             type=sha,format=long
             type=schedule,pattern={{date 'YYYYMMDD'}}
 
-      - name: Build and push
-        uses: docker/build-push-action@v7
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
         with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          provenance: false
-          # Pass the workflow token to the build so the in-Dockerfile GitHub API
-          # calls (resolving latest tool versions) aren't rate-limited. Mounted
-          # as a BuildKit secret, never written into an image layer.
-          secrets: |
-            github_token=${{ secrets.GITHUB_TOKEN }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+
+      - name: Inspect published image
+        run: |
+          docker buildx imagetools inspect \
+            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}"

@@ -81,13 +81,18 @@ The base is **pinned by digest**: `FROM ghcr.io/boldsoftware/exeuntu:latest@sha2
 
 ## Workflow / publishing
 
-`.github/workflows/build-publish.yml` builds multi-arch and pushes to
-`ghcr.io/bhanutejags/exe.dev-vm-image`:
+`.github/workflows/build-publish.yml` builds each arch on a **native** runner
+(`amd64` on `ubuntu-24.04`, `arm64` on `ubuntu-24.04-arm` — no QEMU), pushes
+each by digest, then a `merge` job assembles the multi-arch manifest and pushes
+tags to `ghcr.io/bhanutejags/exe.dev-vm-image`:
 
 - push to `main` touching `Dockerfile`/the workflow → publish `:latest`
 - `workflow_dispatch` → manual build
 - weekly `schedule` → refresh latest-resolving tools
 - `pull_request` → build only (no push), as a smoke test
+
+Native arm runners are free for **public** repos; keep the repo public (or the
+arm leg will need a paid plan / self-hosted runner).
 
 After the first publish, make the GHCR package **public** (or create VMs with
 `--registry-auth USERNAME:PASSWORD`).

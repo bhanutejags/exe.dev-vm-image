@@ -65,8 +65,11 @@ FROM ghcr.io/boldsoftware/exeuntu:latest@sha256:034721bc...
    the digest changes, Dependabot opens a PR bumping the pinned `sha256`.
 2. Merging that PR pushes to `main`, which triggers the **publish workflow**
    ([`.github/workflows/build-publish.yml`](.github/workflows/build-publish.yml)).
-3. The workflow builds a multi-arch image (`linux/amd64`, `linux/arm64`) and
-   pushes it to `ghcr.io/bhanutejags/exe.dev-vm-image:latest`.
+3. The workflow builds each architecture on a **native** GitHub-hosted runner
+   (`amd64` on `ubuntu-24.04`, `arm64` on `ubuntu-24.04-arm` — no QEMU
+   emulation), then a `merge` job combines the per-arch digests into one
+   multi-arch manifest and pushes it to
+   `ghcr.io/bhanutejags/exe.dev-vm-image:latest`.
 
 A **weekly scheduled run** of the same workflow also rebuilds the image so the
 latest-resolving GitHub-release tools stay fresh even between base-image bumps.
