@@ -48,6 +48,9 @@ codex, pi, fd, Chrome, Tailscale, etc. **Don't duplicate** those.
 
 If `setup-exedev.sh` changes in the dotfiles repo, mirror the change here.
 
+The image also pre-creates `~/workspace` (owned by `exedev`) — the personal
+directory convention for checking out projects. Keep it.
+
 Notes:
 
 - The image is **multi-arch** (`linux/amd64`, `linux/arm64`). Use `TARGETARCH`

@@ -26,6 +26,9 @@ Tools already provided by `exeuntu` are not duplicated. The GitHub-release
 tools resolve their **latest** version at build time, so a rebuild always picks
 up the newest releases.
 
+It also pre-creates `~/workspace` (owned by `exedev`) — the directory
+convention I use for checking out projects.
+
 ## Using it
 
 Create a VM from the published image:
