@@ -92,9 +92,12 @@ jobs:
           provenance: false
           # Pass the workflow token to the build so the in-Dockerfile GitHub API
           # calls (resolving latest tool versions) aren't rate-limited. Mounted
-          # as a BuildKit secret, never written into an image layer.
+          # as a BuildKit secret, never written into an image layer. Only passed
+          # on trusted (non-PR) events; the Dockerfile falls back to the
+          # unauthenticated API when the secret is absent, so fork PRs never see
+          # the token.
           secrets: |
-            github_token=${{ secrets.GITHUB_TOKEN }}
+            github_token=${{ github.event_name != 'pull_request' && secrets.GITHUB_TOKEN || '' }}
           cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
           cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
@@ -162,3 +165,29 @@ jobs:
         run: |
           docker buildx imagetools inspect \
             "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}"
+
+  cleanup:
+    name: prune untagged versions
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    needs: [merge]
+    permissions:
+      packages: write
+    steps:
+      # push-by-digest leaves the previous build's per-arch child manifests
+      # untagged once :latest moves. This action is multi-arch aware: child
+      # manifests still referenced by a tagged manifest list (e.g. :latest) are
+      # kept; only truly orphaned digests are deleted. Janitorial only, so a
+      # permission hiccup shouldn't fail the publish.
+      #
+      # Note: deleting requires GITHUB_TOKEN to have access to the package. If
+      # this 403s, link the package to this repo (package settings) or swap in a
+      # PAT with `delete:packages`.
+      - name: Delete orphaned untagged image versions
+        continue-on-error: true
+        uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          package: exe.dev-vm-image
+          owner: ${{ github.repository_owner }}
+          delete-untagged: true
+          token: ${{ secrets.GITHUB_TOKEN }}
