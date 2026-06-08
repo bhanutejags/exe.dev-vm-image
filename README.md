@@ -26,8 +26,10 @@ uv, Docker, Claude Code, codex, pi, fd, …):
 GitHub-release tools resolve to their **latest** version at build time. `zsh` is
 installed but not set as the default login shell. `rustup` is installed as the
 Rust toolchain manager only (no toolchain) — `cargo`/`rustc` fetch the
-project-pinned toolchain on first use. `~/workplace` is pre-created (owned by
-`exedev`) for checking out projects.
+project-pinned toolchain on first use — plus `cargo-binstall` for installing
+prebuilt Rust binaries (run `cargo-binstall <crate>` directly; it needs no
+toolchain). `~/workplace` is pre-created (owned by `exedev`) for checking out
+projects.
 
 ## Using it
 

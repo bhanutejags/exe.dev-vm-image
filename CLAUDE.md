@@ -44,6 +44,9 @@ dotfiles repo installs, and **only those not already in `exeuntu`**. As of now:
 - `rustup` via rustup-init with `--default-toolchain none`: the Rust toolchain
   manager + proxy shims only, no `rustc`/`cargo`/`std` (installed on demand).
   Don't bake a full toolchain — it's huge and usually project-pinned.
+- `cargo-binstall` via the official installer (prebuilt Rust binary installer).
+  Works toolchain-free as `cargo-binstall <crate>`; `cargo binstall …` (the
+  subcommand form) needs a default toolchain set.
 
 `zsh` is installed but not set as the login shell (the dotfiles own that via
 `chsh`/`.zshrc`). `nu` is a secondary structured-data shell, not a login shell

@@ -162,7 +162,7 @@ nu --version
 EOF
 
 # ---------------------------------------------------------------------------
-# 3. rustup — the Rust toolchain manager only, with NO toolchain installed.
+# 3. Rust: rustup (manager only, NO toolchain) + cargo-binstall.
 #    Installs the rustup manager + cargo/rustc proxy shims (~15 MB) but no
 #    rustc/cargo/std. The real toolchain installs on demand the first time a
 #    project needs it (e.g. a rust-toolchain.toml) or via
@@ -174,6 +174,13 @@ USER exedev
 RUN curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
       | sh -s -- -y --no-modify-path --default-toolchain none --profile minimal && \
     "${CARGO_HOME}/bin/rustup" --version
+# cargo-binstall: install prebuilt Rust binaries without compiling. The official
+# installer auto-detects the arch and drops the binary in $CARGO_HOME/bin; it
+# needs no Rust toolchain to run.
+RUN curl --proto '=https' --tlsv1.2 -fsSL \
+      https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
+      | bash && \
+    "${CARGO_HOME}/bin/cargo-binstall" --version
 USER root
 RUN ln -sf "${CARGO_HOME}"/bin/* /usr/local/bin/
 
