@@ -96,13 +96,15 @@ After the first publish, make the GHCR package **public** (or create VMs with
 
 ## Formatting
 
-Run prettier before committing (covers Markdown / YAML / JSON):
+Run the mise task before committing (prettier over Markdown / YAML / JSON):
 
 ```bash
-prettier --write "**/*.{md,yml,yaml,json}"
+mise run fmt        # write
+mise run fmt:check  # verify only (CI / pre-commit)
 ```
 
-The `Dockerfile` is not prettier-formatted; keep it tidy by hand.
+Tasks and the pinned prettier live in [`.mise.toml`](.mise.toml). The
+`Dockerfile` is not prettier-formatted; keep it tidy by hand.
 
 ## Conventions
 

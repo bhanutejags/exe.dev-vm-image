@@ -1,0 +1,14 @@
+# mise config: pins the formatter and defines format tasks.
+# Run `mise install` once, then `mise run fmt` (or `mise run fmt:check`).
+
+[tools]
+# prettier installed via mise's npm backend so the version is consistent.
+"npm:prettier" = "latest"
+
+[tasks.fmt]
+description = "Format Markdown / YAML / JSON with prettier"
+run = 'prettier --write "**/*.{md,yml,yaml,json}"'
+
+[tasks."fmt:check"]
+description = "Check formatting without writing (use in CI / pre-commit)"
+run = 'prettier --check "**/*.{md,yml,yaml,json}"'
