@@ -166,7 +166,7 @@ yazi --version
 eza --version
 starship --version
 nu --version
-cargo-binstall --version
+cargo-binstall -V  # cargo-binstall uses --version for the crate version; -V prints its own
 EOF
 
 # ---------------------------------------------------------------------------
