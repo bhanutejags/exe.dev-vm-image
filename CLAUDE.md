@@ -40,13 +40,17 @@ dotfiles repo installs, and **only those not already in `exeuntu`**. As of now:
 
 - apt: `zoxide`, `bat` (symlinked from `batcat`), `zsh`, `fzf`
 - GitHub releases: `btm` (bottom), `jj`, `mise`, `chezmoi`, `zellij`, `yazi`+`ya`,
-  `eza`, `starship`, `nu` (nushell)
+  `eza`, `starship`, `nu` (nushell), `cargo-binstall`
 - `rustup` via rustup-init with `--default-toolchain none`: the Rust toolchain
   manager + proxy shims only, no `rustc`/`cargo`/`std` (installed on demand).
   Don't bake a full toolchain — it's huge and usually project-pinned.
-- `cargo-binstall` via the official installer (prebuilt Rust binary installer).
-  Works toolchain-free as `cargo-binstall <crate>`; `cargo binstall …` (the
-  subcommand form) needs a default toolchain set.
+- `cargo-binstall` installs prebuilt Rust binaries; run it as
+  `cargo-binstall <crate>` (toolchain-free) — the `cargo binstall …` subcommand
+  form needs a default toolchain set.
+
+No `curl | bash` of external install scripts — pull the download logic into the
+Dockerfile (resolve the release, fetch the binary, install it), like every
+other GitHub-release tool.
 
 `zsh` is installed but not set as the login shell (the dotfiles own that via
 `chsh`/`.zshrc`). `nu` is a secondary structured-data shell, not a login shell

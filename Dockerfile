@@ -145,6 +145,13 @@ curl -fsSL --retry 3 "${GH_AUTH[@]}" \
   tar xz -C "${tmp}"
 install -m 0755 "${tmp}/nu-${NU_VERSION}-${GNU_TRIPLE}/nu" "${BINDIR}/nu"
 
+# --- cargo-binstall (install prebuilt Rust binaries, no compiling) ---
+CARGO_BINSTALL_VERSION="$(gh_latest cargo-bins/cargo-binstall)"
+curl -fsSL --retry 3 "${GH_AUTH[@]}" \
+  "https://github.com/cargo-bins/cargo-binstall/releases/download/v${CARGO_BINSTALL_VERSION}/cargo-binstall-${RUST_MUSL}.tgz" |
+  tar xz -C "${tmp}"
+install -m 0755 "${tmp}/cargo-binstall" "${BINDIR}/cargo-binstall"
+
 # Smoke-test everything we just installed.
 zoxide --version
 bat --version
@@ -159,28 +166,35 @@ yazi --version
 eza --version
 starship --version
 nu --version
+cargo-binstall --version
 EOF
 
 # ---------------------------------------------------------------------------
-# 3. Rust: rustup (manager only, NO toolchain) + cargo-binstall.
+# 3. rustup — the Rust toolchain manager only, with NO toolchain installed.
 #    Installs the rustup manager + cargo/rustc proxy shims (~15 MB) but no
 #    rustc/cargo/std. The real toolchain installs on demand the first time a
 #    project needs it (e.g. a rust-toolchain.toml) or via
 #    `rustup toolchain install`. Kept in the exedev home so on-demand installs
 #    need no sudo; the proxies are symlinked onto the system PATH.
+#    We fetch the official rustup-init binary directly (no `curl | sh`).
 # ---------------------------------------------------------------------------
 ENV RUSTUP_HOME=/home/exedev/.rustup CARGO_HOME=/home/exedev/.cargo
 USER exedev
-RUN curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
-      | sh -s -- -y --no-modify-path --default-toolchain none --profile minimal && \
-    "${CARGO_HOME}/bin/rustup" --version
-# cargo-binstall: install prebuilt Rust binaries without compiling. The official
-# installer auto-detects the arch and drops the binary in $CARGO_HOME/bin; it
-# needs no Rust toolchain to run.
-RUN curl --proto '=https' --tlsv1.2 -fsSL \
-      https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
-      | bash && \
-    "${CARGO_HOME}/bin/cargo-binstall" --version
+RUN <<'EOF'
+set -euxo pipefail
+case "${TARGETARCH}" in
+  amd64) RUST_HOST="x86_64-unknown-linux-gnu" ;;
+  arm64) RUST_HOST="aarch64-unknown-linux-gnu" ;;
+  *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;;
+esac
+tmp="$(mktemp -d)"
+trap 'rm -rf "${tmp}"' EXIT
+curl -fsSL --retry 3 --proto '=https' --tlsv1.2 \
+  "https://static.rust-lang.org/rustup/dist/${RUST_HOST}/rustup-init" -o "${tmp}/rustup-init"
+chmod +x "${tmp}/rustup-init"
+"${tmp}/rustup-init" -y --no-modify-path --default-toolchain none --profile minimal
+"${CARGO_HOME}/bin/rustup" --version
+EOF
 USER root
 RUN ln -sf "${CARGO_HOME}"/bin/* /usr/local/bin/
 
