@@ -3,7 +3,7 @@
 # Custom exe.dev VM image: the exeuntu base plus extra developer CLI tools.
 # Base is pinned by digest; Dependabot bumps it. Re-pin by hand with:
 #   docker buildx imagetools inspect ghcr.io/boldsoftware/exeuntu:latest
-FROM ghcr.io/boldsoftware/exeuntu:latest@sha256:034721bc6e024074745d29588d7a287a2f8004d3476014bdd2f6b67fe4272aa6
+FROM ghcr.io/boldsoftware/exeuntu:latest@sha256:a4a4a2b5d0fbbba51aed65825f9f720bdf90325ee764f8bce771824f6fd71252
 
 # buildx populates TARGETARCH automatically (amd64 / arm64).
 ARG TARGETARCH
