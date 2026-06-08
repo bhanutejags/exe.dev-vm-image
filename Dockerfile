@@ -161,9 +161,9 @@ starship --version
 nu --version
 EOF
 
-# Personal convention: projects live under ~/workspace. Create it up front,
+# Personal convention: projects live under ~/workplace. Create it up front,
 # owned by the exedev login user, so a fresh VM is ready to clone into.
-RUN install -d -o exedev -g exedev -m 0755 /home/exedev/workspace
+RUN install -d -o exedev -g exedev -m 0755 /home/exedev/workplace
 
 # Re-assert the contract exe.dev expects from a VM image. These are inherited
 # from the base, but we restate them so this image is self-documenting and

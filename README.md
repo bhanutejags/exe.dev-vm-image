@@ -24,7 +24,7 @@ uv, Docker, Claude Code, codex, pi, fd, …):
 | `nu` (nushell)      | GitHub release        |
 
 GitHub-release tools resolve to their **latest** version at build time. `zsh` is
-installed but not set as the default login shell. `~/workspace` is pre-created
+installed but not set as the default login shell. `~/workplace` is pre-created
 (owned by `exedev`) for checking out projects.
 
 ## Using it
