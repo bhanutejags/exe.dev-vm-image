@@ -165,4 +165,3 @@ jobs:
         run: |
           docker buildx imagetools inspect \
             "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}"
-
