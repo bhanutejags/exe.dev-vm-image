@@ -165,3 +165,55 @@ jobs:
         run: |
           docker buildx imagetools inspect \
             "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}"
+
+  cleanup:
+    name: prune untagged versions
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    needs: [merge]
+    permissions:
+      packages: write
+    steps:
+      # push-by-digest leaves orphaned per-arch manifests in GHCR once a tag
+      # moves. Prune untagged versions that are NOT referenced by any tagged
+      # manifest list (multi-arch children of a live tag are kept). First-party
+      # only: gh + docker CLI. Janitorial, so never fail the publish.
+      #
+      # GITHUB_TOKEN can manage org/repo-scoped packages; user-owned packages
+      # usually need a PAT with `delete:packages` (set GHCR_CLEANUP_PAT). If
+      # neither has access the gh calls 403 and the step is skipped harmlessly.
+      - name: Prune orphaned untagged versions
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GHCR_CLEANUP_PAT || secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          PACKAGE: exe.dev-vm-image
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        run: |
+          set -euo pipefail
+          echo "${GH_TOKEN}" | docker login "${{ env.REGISTRY }}" -u "${{ github.actor }}" --password-stdin
+
+          api="/users/${OWNER}/packages/container/${PACKAGE}/versions"
+          versions="$(gh api --paginate "${api}" \
+            -q '.[] | "\(.id) \(.name) \(.metadata.container.tags | length)"')"
+
+          # Digests reachable from a tag: the tagged manifest itself + any
+          # multi-arch children it references. These must never be deleted.
+          referenced=""
+          while read -r id digest tags; do
+            [ "${tags}" -gt 0 ] || continue
+            referenced+="${digest}"$'\n'
+            referenced+="$(docker buildx imagetools inspect --raw "${IMAGE}@${digest}" \
+              | jq -r '.manifests[]?.digest' 2>/dev/null || true)"$'\n'
+          done <<< "${versions}"
+
+          # Delete untagged versions absent from the referenced set.
+          while read -r id digest tags; do
+            [ "${tags}" -eq 0 ] || continue
+            if grep -qxF "${digest}" <<< "${referenced}"; then
+              echo "keep   ${digest} (referenced)"
+            else
+              echo "delete ${digest} (orphan, id ${id})"
+              gh api -X DELETE "${api}/${id}"
+            fi
+          done <<< "${versions}"
