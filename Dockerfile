@@ -161,6 +161,22 @@ starship --version
 nu --version
 EOF
 
+# ---------------------------------------------------------------------------
+# 3. rustup — the Rust toolchain manager only, with NO toolchain installed.
+#    Installs the rustup manager + cargo/rustc proxy shims (~15 MB) but no
+#    rustc/cargo/std. The real toolchain installs on demand the first time a
+#    project needs it (e.g. a rust-toolchain.toml) or via
+#    `rustup toolchain install`. Kept in the exedev home so on-demand installs
+#    need no sudo; the proxies are symlinked onto the system PATH.
+# ---------------------------------------------------------------------------
+ENV RUSTUP_HOME=/home/exedev/.rustup CARGO_HOME=/home/exedev/.cargo
+USER exedev
+RUN curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
+      | sh -s -- -y --no-modify-path --default-toolchain none --profile minimal && \
+    "${CARGO_HOME}/bin/rustup" --version
+USER root
+RUN ln -sf "${CARGO_HOME}"/bin/* /usr/local/bin/
+
 # Personal convention: projects live under ~/workplace. Create it up front,
 # owned by the exedev login user, so a fresh VM is ready to clone into.
 RUN install -d -o exedev -g exedev -m 0755 /home/exedev/workplace
