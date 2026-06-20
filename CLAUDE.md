@@ -40,7 +40,18 @@ dotfiles repo installs, and **only those not already in `exeuntu`**. As of now:
 
 - apt: `zoxide`, `bat` (symlinked from `batcat`), `zsh`, `fzf`
 - GitHub releases: `btm` (bottom), `jj`, `mise`, `chezmoi`, `zellij`, `yazi`+`ya`,
-  `eza`, `starship`, `nu` (nushell), `cargo-binstall`
+  `eza`, `starship`, `nu` (nushell), `cargo-binstall`, `nvim` (current Neovim),
+  `tree-sitter` (CLI), `procs` (modern `ps`), `tldr` (tealdeer)
+- `fd`: already in the base but only at pi's private `~/.pi/agent/bin/fd` (off
+  `PATH`). Symlinked onto `PATH` — the dotfiles assume `fd` is callable
+  (`FZF_DEFAULT_COMMAND`, the `vv`/`zjw` helpers, the chezmoi run-scripts).
+  **Don't** download a second copy.
+- oh-my-zsh + the four zsh plugins the dotfiles' `.zshrc` sources
+  (`zsh-autosuggestions`, `zsh-syntax-highlighting`, `forgit`,
+  `zsh-you-should-use`): shallow git clones baked into
+  `~/.local/share/zsh/plugins` (`.git` stripped) so first login has a working,
+  fully-featured zsh with no network round-trip. The dotfiles still own `.zshrc`
+  and source the plugins from there as a Homebrew-independent fallback.
 - `rustup` via rustup-init with `--default-toolchain none`: the Rust toolchain
   manager + proxy shims only, no `rustc`/`cargo`/`std` (installed on demand).
   Don't bake a full toolchain — it's huge and usually project-pinned.
@@ -59,7 +70,10 @@ other GitHub-release tool.
 Before adding a tool, check the upstream
 [`exeuntu` Dockerfile](https://github.com/boldsoftware/exeuntu/blob/main/Dockerfile)
 — it already ships git, jq, ripgrep, neovim, gh, Go, uv, Docker, Claude Code,
-codex, pi, fd, Chrome, Tailscale, etc. **Don't duplicate** those.
+codex, pi, fd, Chrome, Tailscale, etc. **Don't duplicate** those — with two
+deliberate exceptions: we bake a **current** `neovim` (the base's apt one is too
+old for the dotfiles' config) that shadows the base on `PATH`, and we symlink
+the base's `fd` onto `PATH` (it ships only at pi's private path).
 
 If `setup-exedev.sh` changes in the dotfiles repo, mirror the change here.
 
@@ -75,7 +89,11 @@ Notes:
   use the `github_token` BuildKit secret (never baked into a layer) to dodge the
   unauthenticated rate limit.
 - `mise`'s tarball is `mise/bin/mise`; the others extract the binary at the top
-  level (or under `yazi-<triple>/`).
+  level (or under `yazi-<triple>/`). The newer additions vary: `nvim` unpacks a
+  full `bin/`+`lib/`+`share/` tree that's copied wholesale into `/usr/local`
+  (so `share/nvim/runtime` is found); `tree-sitter` ships a single gzipped
+  binary (`gunzip`, no tar); `procs` is a zip whose filename embeds the version;
+  `tldr` (tealdeer) is a bare binary (no archive).
 
 ## Staying in sync with upstream exeuntu
 

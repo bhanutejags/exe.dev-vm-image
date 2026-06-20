@@ -9,27 +9,40 @@ developer CLI tools, so a fresh VM is ready out of the box.
 On top of `exeuntu` (Ubuntu 24.04 + systemd, git, jq, ripgrep, neovim, gh, Go,
 uv, Docker, Claude Code, codex, pi, fd, …):
 
-| Tool                | Source                |
-| ------------------- | --------------------- |
-| `zoxide`, `bat`     | apt (Ubuntu universe) |
-| `zsh`, `fzf`        | apt (Ubuntu universe) |
-| `btm` (bottom)      | GitHub release        |
-| `jj` (Jujutsu)      | GitHub release        |
-| `mise`              | GitHub release        |
-| `chezmoi`           | GitHub release        |
-| `zellij`            | GitHub release        |
-| `yazi` (+ `ya`)     | GitHub release        |
-| `eza` (modern `ls`) | GitHub release        |
-| `starship` (prompt) | GitHub release        |
-| `nu` (nushell)      | GitHub release        |
+| Tool                      | Source                |
+| ------------------------- | --------------------- |
+| `zoxide`, `bat`           | apt (Ubuntu universe) |
+| `zsh`, `fzf`              | apt (Ubuntu universe) |
+| `btm` (bottom)            | GitHub release        |
+| `jj` (Jujutsu)            | GitHub release        |
+| `mise`                    | GitHub release        |
+| `chezmoi`                 | GitHub release        |
+| `zellij`                  | GitHub release        |
+| `yazi` (+ `ya`)           | GitHub release        |
+| `eza` (modern `ls`)       | GitHub release        |
+| `starship` (prompt)       | GitHub release        |
+| `nu` (nushell)            | GitHub release        |
+| `nvim` (current Neovim)   | GitHub release        |
+| `tree-sitter` (CLI)       | GitHub release        |
+| `procs` (modern `ps`)     | GitHub release        |
+| `tldr` (tealdeer)         | GitHub release        |
+| oh-my-zsh + 4 zsh plugins | git clone (baked)     |
 
 GitHub-release tools resolve to their **latest** version at build time. `zsh` is
-installed but not set as the default login shell. `rustup` is installed as the
-Rust toolchain manager only (no toolchain) — `cargo`/`rustc` fetch the
-project-pinned toolchain on first use — plus `cargo-binstall` for installing
-prebuilt Rust binaries (run `cargo-binstall <crate>` directly; it needs no
-toolchain). `~/workplace` is pre-created (owned by `exedev`) for checking out
-projects.
+installed but not set as the default login shell. The base ships an older apt
+`neovim`; we bake a **current** Neovim (the dotfiles' config targets a recent
+release) that shadows it on `PATH`, plus the `tree-sitter` CLI the dotfiles use
+to build parsers. `fd` (already in the base, but only at pi's private path) is
+symlinked onto `PATH` since the dotfiles expect it there. **oh-my-zsh** and the
+four zsh plugins the dotfiles' `.zshrc` sources (`zsh-autosuggestions`,
+`zsh-syntax-highlighting`, `forgit`, `zsh-you-should-use`) are baked into
+`~/.local/share/zsh/plugins` so first login has a working, fully-featured shell
+without a network round-trip — the dotfiles still own `.zshrc` and source them
+from there as a Homebrew-independent fallback. `rustup` is installed as the Rust
+toolchain manager only (no toolchain) — `cargo`/`rustc` fetch the project-pinned
+toolchain on first use — plus `cargo-binstall` for installing prebuilt Rust
+binaries (run `cargo-binstall <crate>` directly; it needs no toolchain).
+`~/workplace` is pre-created (owned by `exedev`) for checking out projects.
 
 ## Using it
 

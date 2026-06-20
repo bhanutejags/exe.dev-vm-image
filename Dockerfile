@@ -59,12 +59,18 @@ case "${TARGETARCH}" in
     CHEZMOI_ARCH="amd64"
     RUST_MUSL="x86_64-unknown-linux-musl"
     GNU_TRIPLE="x86_64-unknown-linux-gnu"
+    NVIM_ARCH="x86_64"
+    TS_ARCH="x64"
+    UNAME_ARCH="x86_64"
     ;;
   arm64)
     MISE_ARCH="arm64"
     CHEZMOI_ARCH="arm64"
     RUST_MUSL="aarch64-unknown-linux-musl"
     GNU_TRIPLE="aarch64-unknown-linux-gnu"
+    NVIM_ARCH="arm64"
+    TS_ARCH="arm64"
+    UNAME_ARCH="aarch64"
     ;;
   *)
     echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2
@@ -152,6 +158,45 @@ curl -fsSL --retry 3 "${GH_AUTH[@]}" \
   tar xz -C "${tmp}"
 install -m 0755 "${tmp}/cargo-binstall" "${BINDIR}/cargo-binstall"
 
+# --- neovim (editor) ---
+# The base ships an older apt neovim; the dotfiles' config targets a current
+# release (vanilla 0.12: lsp/ dir + builtin treesitter, no nvim-treesitter
+# plugin), so bake the official prebuilt tarball. It unpacks bin/ + lib/ +
+# share/ — copy the whole tree into /usr/local so bin/nvim lands on PATH
+# (shadowing the base) and share/nvim/runtime is found.
+NVIM_VERSION="$(gh_latest neovim/neovim)"
+curl -fsSL --retry 3 "${GH_AUTH[@]}" \
+  "https://github.com/neovim/neovim/releases/download/v${NVIM_VERSION}/nvim-linux-${NVIM_ARCH}.tar.gz" |
+  tar xz -C "${tmp}"
+cp -a "${tmp}/nvim-linux-${NVIM_ARCH}/." /usr/local/
+
+# --- tree-sitter CLI ---
+# Used by the dotfiles' run_onchange parser-build script (nvim-treesitter was
+# archived; the CLI replaces its parser management). Asset is a single
+# gzipped binary, not a tarball.
+TREE_SITTER_VERSION="$(gh_latest tree-sitter/tree-sitter)"
+curl -fsSL --retry 3 "${GH_AUTH[@]}" \
+  "https://github.com/tree-sitter/tree-sitter/releases/download/v${TREE_SITTER_VERSION}/tree-sitter-linux-${TS_ARCH}.gz" |
+  gunzip >"${tmp}/tree-sitter"
+install -m 0755 "${tmp}/tree-sitter" "${BINDIR}/tree-sitter"
+
+# --- procs (modern ps; dotfiles alias pst/psw/psc/psm) ---
+# Release filename embeds the version; asset is a zip containing the binary.
+PROCS_VERSION="$(gh_latest dalance/procs)"
+curl -fsSL --retry 3 "${GH_AUTH[@]}" \
+  "https://github.com/dalance/procs/releases/download/v${PROCS_VERSION}/procs-v${PROCS_VERSION}-${UNAME_ARCH}-linux.zip" \
+  -o "${tmp}/procs.zip"
+unzip -qo "${tmp}/procs.zip" -d "${tmp}"
+install -m 0755 "${tmp}/procs" "${BINDIR}/procs"
+
+# --- tldr (tealdeer; dotfiles run `tldr --update`) ---
+# Asset is a bare binary (no archive).
+TEALDEER_VERSION="$(gh_latest tealdeer-rs/tealdeer)"
+curl -fsSL --retry 3 "${GH_AUTH[@]}" \
+  "https://github.com/tealdeer-rs/tealdeer/releases/download/v${TEALDEER_VERSION}/tealdeer-linux-${UNAME_ARCH}-musl" \
+  -o "${tmp}/tldr"
+install -m 0755 "${tmp}/tldr" "${BINDIR}/tldr"
+
 # Smoke-test everything we just installed.
 zoxide --version
 bat --version
@@ -167,6 +212,10 @@ eza --version
 starship --version
 nu --version
 cargo-binstall -V  # cargo-binstall uses --version for the crate version; -V prints its own
+nvim --version
+tree-sitter --version
+procs --version
+tldr --version
 EOF
 
 # ---------------------------------------------------------------------------
@@ -197,6 +246,41 @@ chmod +x "${tmp}/rustup-init"
 EOF
 USER root
 RUN ln -sf "${CARGO_HOME}"/bin/* /usr/local/bin/
+
+# ---------------------------------------------------------------------------
+# 4. fd: the base ships fd but only at pi's private ~/.pi/agent/bin/fd, which
+#    is NOT on the global PATH. The dotfiles assume `fd` is callable
+#    (FZF_DEFAULT_COMMAND, the vv/zjw helpers, the chezmoi run-scripts), so
+#    symlink the existing binary onto PATH rather than downloading a second
+#    copy. (Depends on the base keeping that path; a move would surface as a
+#    build-time failure of the smoke test below, not a silent breakage.)
+# ---------------------------------------------------------------------------
+RUN test -x /home/exedev/.pi/agent/bin/fd && \
+    ln -sf /home/exedev/.pi/agent/bin/fd /usr/local/bin/fd && \
+    fd --version
+
+# ---------------------------------------------------------------------------
+# 5. Shell framework: oh-my-zsh + the zsh plugins the dotfiles' .zshrc sources.
+#    Baked here (small, stable git clones) so a fresh VM logs into a working,
+#    fully-featured zsh with no network round-trip. The dotfiles still own
+#    .zshrc; they source these plugins from ~/.local/share/zsh/plugins as a
+#    Homebrew-independent fallback. .git dirs are stripped to keep it tiny.
+#    Run as exedev so everything is owned by the login user.
+# ---------------------------------------------------------------------------
+USER exedev
+RUN <<'EOF'
+set -euxo pipefail
+git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git /home/exedev/.oh-my-zsh
+PLUGIN_DIR=/home/exedev/.local/share/zsh/plugins
+mkdir -p "${PLUGIN_DIR}"
+git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions "${PLUGIN_DIR}/zsh-autosuggestions"
+git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting "${PLUGIN_DIR}/zsh-syntax-highlighting"
+git clone --depth=1 https://github.com/wfxr/forgit "${PLUGIN_DIR}/forgit"
+git clone --depth=1 https://github.com/MichaelAquilina/zsh-you-should-use "${PLUGIN_DIR}/zsh-you-should-use"
+# Drop the git metadata — these are baked snapshots, not working trees.
+find /home/exedev/.oh-my-zsh "${PLUGIN_DIR}" -name .git -type d -prune -exec rm -rf {} +
+EOF
+USER root
 
 # Personal convention: projects live under ~/workplace. Create it up front,
 # owned by the exedev login user, so a fresh VM is ready to clone into.
