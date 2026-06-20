@@ -162,13 +162,16 @@ install -m 0755 "${tmp}/cargo-binstall" "${BINDIR}/cargo-binstall"
 # The base ships an older apt neovim; the dotfiles' config targets a current
 # release (vanilla 0.12: lsp/ dir + builtin treesitter, no nvim-treesitter
 # plugin), so bake the official prebuilt tarball. It unpacks bin/ + lib/ +
-# share/ — copy the whole tree into /usr/local so bin/nvim lands on PATH
-# (shadowing the base) and share/nvim/runtime is found.
+# share/ — copy the whole tree into /usr/local so share/nvim/runtime is found.
+# NOTE: /usr/local/bin is NOT guaranteed to precede /usr/bin on exe.dev's
+# PATH (it's last), so we can't rely on shadowing — symlink our binary over
+# the base's apt nvim in /usr/bin to guarantee the current nvim always wins.
 NVIM_VERSION="$(gh_latest neovim/neovim)"
 curl -fsSL --retry 3 "${GH_AUTH[@]}" \
   "https://github.com/neovim/neovim/releases/download/v${NVIM_VERSION}/nvim-linux-${NVIM_ARCH}.tar.gz" |
   tar xz -C "${tmp}"
 cp -a "${tmp}/nvim-linux-${NVIM_ARCH}/." /usr/local/
+ln -sf /usr/local/bin/nvim /usr/bin/nvim
 
 # --- tree-sitter CLI ---
 # Used by the dotfiles' run_onchange parser-build script (nvim-treesitter was
