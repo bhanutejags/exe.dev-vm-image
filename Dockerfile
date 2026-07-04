@@ -5,220 +5,101 @@
 #   docker buildx imagetools inspect ghcr.io/boldsoftware/exeuntu:latest
 FROM ghcr.io/boldsoftware/exeuntu:latest@sha256:034721bc6e024074745d29588d7a287a2f8004d3476014bdd2f6b67fe4272aa6
 
-# buildx populates TARGETARCH automatically (amd64 / arm64).
-ARG TARGETARCH
-
-# Most of the install steps below run as root (apt + binaries into
-# /usr/local/bin). The base image leaves USER=root before its CMD, so we are
-# already root here, but make it explicit for clarity.
+# Most of the install steps below run as root (apt + binaries into /usr/local).
+# The base image leaves USER=root before its CMD, so we are already root here,
+# but make it explicit for clarity.
 USER root
 SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
 
 # ---------------------------------------------------------------------------
-# 1. apt-installed tools: zoxide, bat, zsh, fzf
-#    (bat installs the `batcat` binary on Debian/Ubuntu; we also symlink `bat`.)
+# 1. apt: zsh only.
 #    zsh is installed but NOT made the default login shell — the chezmoi
-#    dotfiles own that decision (chsh / .zshrc). nushell (added below) is a
-#    secondary shell, not a login shell, since it isn't POSIX.
+#    dotfiles own that decision (chsh / .zshrc). Everything else we used to
+#    apt-install (zoxide, bat, fzf) now comes from mise in step 2, so it stays
+#    on the single declarative tool list.
 # ---------------------------------------------------------------------------
 RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get update && \
-    apt-get install -y --no-install-recommends zoxide bat zsh fzf && \
-    ln -sf /usr/bin/batcat /usr/local/bin/bat && \
+    apt-get install -y --no-install-recommends zsh && \
     rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
-# 2. GitHub-release binaries.
-#    Versions are resolved at build time so a rebuild (weekly schedule or
-#    manual dispatch) always picks up the latest upstream release. A
-#    GITHUB_TOKEN BuildKit secret is used (when present) to avoid the
-#    unauthenticated GitHub API rate limit on shared CI runners. The secret is
-#    never written to a layer.
+# 2. GitHub-release CLI tools, installed declaratively via mise.
+#
+#    The tool list lives in image-tools.toml (the single source of truth).
+#    mise resolves each tool's latest release and the correct asset for the
+#    HOST arch on its own — the image builds natively per-arch, so there is no
+#    TARGETARCH mapping table anymore. We then symlink the resolved binaries
+#    onto /usr/local/bin so they are real binaries on the system PATH: no mise
+#    activation is needed for root / systemd / non-login shells, matching the
+#    old direct-download behaviour.
+#
+#    mise itself is bootstrapped from its GitHub release first (it can't install
+#    itself), and stays on PATH because the dotfiles run `mise activate` at
+#    login. The github_token BuildKit secret feeds GITHUB_TOKEN so the github
+#    backend and the bootstrap dodge the unauthenticated GitHub rate limit; it
+#    never lands in a layer. A BuildKit cache mount on mise's download cache lets
+#    incremental rebuilds skip re-fetching unchanged assets (the installs
+#    themselves live in the image at MISE_DATA_DIR, not the cache).
 # ---------------------------------------------------------------------------
-RUN --mount=type=secret,id=github_token,required=false <<'EOF'
+ENV MISE_DATA_DIR=/usr/local/share/mise \
+    MISE_CACHE_DIR=/var/cache/mise \
+    MISE_CONFIG_FILE=/etc/mise/config.toml
+COPY image-tools.toml /etc/mise/config.toml
+
+RUN --mount=type=secret,id=github_token,required=false \
+    --mount=type=cache,target=/var/cache/mise <<'EOF'
 set -euxo pipefail
 
-# Read the optional token and build a curl auth header if we have one.
-GH_AUTH=()
+# Optional token: export it so both the bootstrap curl and mise's github backend
+# authenticate to the GitHub API.
 if [ -f /run/secrets/github_token ]; then
-  TOKEN="$(cat /run/secrets/github_token)"
-  [ -n "${TOKEN}" ] && GH_AUTH=(-H "Authorization: Bearer ${TOKEN}")
+  export GITHUB_TOKEN="$(cat /run/secrets/github_token)"
 fi
+GH_AUTH=()
+[ -n "${GITHUB_TOKEN:-}" ] && GH_AUTH=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
 
-# Latest release tag (with leading "v" stripped) for owner/repo.
-gh_latest() {
-  curl -fsSL --retry 3 "${GH_AUTH[@]}" \
-    "https://api.github.com/repos/$1/releases/latest" |
-    jq -r '.tag_name' | sed 's/^v//'
-}
-
-# Per-tool arch naming. buildx gives us amd64 / arm64.
-case "${TARGETARCH}" in
-  amd64)
-    MISE_ARCH="x64"
-    CHEZMOI_ARCH="amd64"
-    RUST_MUSL="x86_64-unknown-linux-musl"
-    GNU_TRIPLE="x86_64-unknown-linux-gnu"
-    NVIM_ARCH="x86_64"
-    TS_ARCH="x64"
-    UNAME_ARCH="x86_64"
-    ;;
-  arm64)
-    MISE_ARCH="arm64"
-    CHEZMOI_ARCH="arm64"
-    RUST_MUSL="aarch64-unknown-linux-musl"
-    GNU_TRIPLE="aarch64-unknown-linux-gnu"
-    NVIM_ARCH="arm64"
-    TS_ARCH="arm64"
-    UNAME_ARCH="aarch64"
-    ;;
-  *)
-    echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2
-    exit 1
-    ;;
+# --- bootstrap the mise binary (native arch via uname) ---
+case "$(uname -m)" in
+  x86_64)  MISE_ARCH="x64" ;;
+  aarch64) MISE_ARCH="arm64" ;;
+  *) echo "Unsupported arch: $(uname -m)" >&2; exit 1 ;;
 esac
-
-BINDIR=/usr/local/bin
-tmp="$(mktemp -d)"
-trap 'rm -rf "${tmp}"' EXIT
-
-# --- jj (Jujutsu VCS) ---
-JJ_VERSION="$(gh_latest jj-vcs/jj)"
-curl -fsSL --retry 3 "${GH_AUTH[@]}" \
-  "https://github.com/jj-vcs/jj/releases/download/v${JJ_VERSION}/jj-v${JJ_VERSION}-${RUST_MUSL}.tar.gz" |
-  tar xz -C "${tmp}"
-install -m 0755 "${tmp}/jj" "${BINDIR}/jj"
-
-# --- mise ---
-MISE_VERSION="$(gh_latest jdx/mise)"
+MISE_VERSION="$(curl -fsSL --retry 3 "${GH_AUTH[@]}" \
+  https://api.github.com/repos/jdx/mise/releases/latest | jq -r '.tag_name' | sed 's/^v//')"
+tmp="$(mktemp -d)"; trap 'rm -rf "${tmp}"' EXIT
 curl -fsSL --retry 3 "${GH_AUTH[@]}" \
   "https://github.com/jdx/mise/releases/download/v${MISE_VERSION}/mise-v${MISE_VERSION}-linux-${MISE_ARCH}-musl.tar.gz" |
   tar xz -C "${tmp}"
-install -m 0755 "${tmp}/mise/bin/mise" "${BINDIR}/mise"
+install -m 0755 "${tmp}/mise/bin/mise" /usr/local/bin/mise
 
-# --- chezmoi ---
-CHEZMOI_VERSION="$(gh_latest twpayne/chezmoi)"
-curl -fsSL --retry 3 "${GH_AUTH[@]}" \
-  "https://github.com/twpayne/chezmoi/releases/download/v${CHEZMOI_VERSION}/chezmoi_${CHEZMOI_VERSION}_linux_${CHEZMOI_ARCH}.tar.gz" |
-  tar xz -C "${tmp}"
-install -m 0755 "${tmp}/chezmoi" "${BINDIR}/chezmoi"
+# --- install every tool on the manifest ---
+mise install --yes
 
-# --- zellij ---
-ZELLIJ_VERSION="$(gh_latest zellij-org/zellij)"
-curl -fsSL --retry 3 "${GH_AUTH[@]}" \
-  "https://github.com/zellij-org/zellij/releases/download/v${ZELLIJ_VERSION}/zellij-${RUST_MUSL}.tar.gz" |
-  tar xz -C "${tmp}"
-install -m 0755 "${tmp}/zellij" "${BINDIR}/zellij"
+# --- expose the resolved binaries on the system PATH ---
+# Symlink every executable in each tool's bin dir onto /usr/local/bin (real
+# binaries, so root / systemd / non-login shells need no `mise activate`). Plain
+# bash glob, not find, so it's independent of the base's find flavour. Covers
+# renamed commands (nvim/btm/nu) and multi-binary packages (yazi's `ya`) with no
+# per-tool mapping. nvim finds its runtime relative to the resolved binary.
+for d in $(mise bin-paths); do
+  for f in "$d"/*; do
+    [ -f "$f" ] && [ -x "$f" ] && ln -sf "$f" /usr/local/bin/
+  done
+done
+# tealdeer's binary is `tealdeer`; the dotfiles (and everyone) call it `tldr`.
+ln -sf "$(command -v tealdeer)" /usr/local/bin/tldr
+# nvim must beat the base's apt nvim regardless of /usr/local/bin PATH order.
+ln -sf "$(mise which nvim)" /usr/bin/nvim
 
-# --- yazi (+ ya helper) ---
-YAZI_VERSION="$(gh_latest sxyazi/yazi)"
-curl -fsSL --retry 3 "${GH_AUTH[@]}" \
-  "https://github.com/sxyazi/yazi/releases/download/v${YAZI_VERSION}/yazi-${GNU_TRIPLE}.zip" \
-  -o "${tmp}/yazi.zip"
-unzip -qo "${tmp}/yazi.zip" -d "${tmp}"
-install -m 0755 "${tmp}/yazi-${GNU_TRIPLE}/yazi" "${BINDIR}/yazi"
-install -m 0755 "${tmp}/yazi-${GNU_TRIPLE}/ya" "${BINDIR}/ya"
-
-# --- btm (bottom) ---
-# Resolve via the bottom repo; its tags have no leading "v".
-BTM_VERSION="$(gh_latest clementtsang/bottom)"
-curl -fsSL --retry 3 "${GH_AUTH[@]}" \
-  "https://github.com/clementtsang/bottom/releases/download/${BTM_VERSION}/bottom_${GNU_TRIPLE}.tar.gz" |
-  tar xz -C "${tmp}"
-install -m 0755 "${tmp}/btm" "${BINDIR}/btm"
-
-# --- eza (modern ls) ---
-EZA_VERSION="$(gh_latest eza-community/eza)"
-curl -fsSL --retry 3 "${GH_AUTH[@]}" \
-  "https://github.com/eza-community/eza/releases/download/v${EZA_VERSION}/eza_${GNU_TRIPLE}.tar.gz" |
-  tar xz -C "${tmp}"
-install -m 0755 "${tmp}/eza" "${BINDIR}/eza"
-
-# --- starship (prompt) ---
-# starship only ships a musl build for aarch64 (no gnu), so use musl for both
-# arches — it's statically linked and runs everywhere.
-STARSHIP_VERSION="$(gh_latest starship/starship)"
-curl -fsSL --retry 3 "${GH_AUTH[@]}" \
-  "https://github.com/starship/starship/releases/download/v${STARSHIP_VERSION}/starship-${RUST_MUSL}.tar.gz" |
-  tar xz -C "${tmp}"
-install -m 0755 "${tmp}/starship" "${BINDIR}/starship"
-
-# --- nushell (secondary structured-data shell) ---
-# Tags have no leading "v"; the tarball extracts into a versioned dir.
-NU_VERSION="$(gh_latest nushell/nushell)"
-curl -fsSL --retry 3 "${GH_AUTH[@]}" \
-  "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-${GNU_TRIPLE}.tar.gz" |
-  tar xz -C "${tmp}"
-install -m 0755 "${tmp}/nu-${NU_VERSION}-${GNU_TRIPLE}/nu" "${BINDIR}/nu"
-
-# --- cargo-binstall (install prebuilt Rust binaries, no compiling) ---
-CARGO_BINSTALL_VERSION="$(gh_latest cargo-bins/cargo-binstall)"
-curl -fsSL --retry 3 "${GH_AUTH[@]}" \
-  "https://github.com/cargo-bins/cargo-binstall/releases/download/v${CARGO_BINSTALL_VERSION}/cargo-binstall-${RUST_MUSL}.tgz" |
-  tar xz -C "${tmp}"
-install -m 0755 "${tmp}/cargo-binstall" "${BINDIR}/cargo-binstall"
-
-# --- neovim (editor) ---
-# The base ships an older apt neovim; the dotfiles' config targets a current
-# release (vanilla 0.12: lsp/ dir + builtin treesitter, no nvim-treesitter
-# plugin), so bake the official prebuilt tarball. It unpacks bin/ + lib/ +
-# share/ — copy the whole tree into /usr/local so share/nvim/runtime is found.
-# NOTE: /usr/local/bin is NOT guaranteed to precede /usr/bin on exe.dev's
-# PATH (it's last), so we can't rely on shadowing — symlink our binary over
-# the base's apt nvim in /usr/bin to guarantee the current nvim always wins.
-NVIM_VERSION="$(gh_latest neovim/neovim)"
-curl -fsSL --retry 3 "${GH_AUTH[@]}" \
-  "https://github.com/neovim/neovim/releases/download/v${NVIM_VERSION}/nvim-linux-${NVIM_ARCH}.tar.gz" |
-  tar xz -C "${tmp}"
-cp -a "${tmp}/nvim-linux-${NVIM_ARCH}/." /usr/local/
-ln -sf /usr/local/bin/nvim /usr/bin/nvim
-
-# --- tree-sitter CLI ---
-# Used by the dotfiles' run_onchange parser-build script (nvim-treesitter was
-# archived; the CLI replaces its parser management). Asset is a single
-# gzipped binary, not a tarball.
-TREE_SITTER_VERSION="$(gh_latest tree-sitter/tree-sitter)"
-curl -fsSL --retry 3 "${GH_AUTH[@]}" \
-  "https://github.com/tree-sitter/tree-sitter/releases/download/v${TREE_SITTER_VERSION}/tree-sitter-linux-${TS_ARCH}.gz" |
-  gunzip >"${tmp}/tree-sitter"
-install -m 0755 "${tmp}/tree-sitter" "${BINDIR}/tree-sitter"
-
-# --- procs (modern ps; dotfiles alias pst/psw/psc/psm) ---
-# Release filename embeds the version; asset is a zip containing the binary.
-PROCS_VERSION="$(gh_latest dalance/procs)"
-curl -fsSL --retry 3 "${GH_AUTH[@]}" \
-  "https://github.com/dalance/procs/releases/download/v${PROCS_VERSION}/procs-v${PROCS_VERSION}-${UNAME_ARCH}-linux.zip" \
-  -o "${tmp}/procs.zip"
-unzip -qo "${tmp}/procs.zip" -d "${tmp}"
-install -m 0755 "${tmp}/procs" "${BINDIR}/procs"
-
-# --- tldr (tealdeer; dotfiles run `tldr --update`) ---
-# Asset is a bare binary (no archive).
-TEALDEER_VERSION="$(gh_latest tealdeer-rs/tealdeer)"
-curl -fsSL --retry 3 "${GH_AUTH[@]}" \
-  "https://github.com/tealdeer-rs/tealdeer/releases/download/v${TEALDEER_VERSION}/tealdeer-linux-${UNAME_ARCH}-musl" \
-  -o "${tmp}/tldr"
-install -m 0755 "${tmp}/tldr" "${BINDIR}/tldr"
-
-# Smoke-test everything we just installed.
-zoxide --version
-bat --version
-fzf --version
-zsh --version
-btm --version
-jj --version
-mise --version
-chezmoi --version
-zellij --version
-yazi --version
-eza --version
-starship --version
-nu --version
-cargo-binstall -V  # cargo-binstall uses --version for the crate version; -V prints its own
-nvim --version
-tree-sitter --version
-procs --version
-tldr --version
+# --- smoke-test everything ---
+mise ls --installed
+for c in zsh nvim zellij eza starship nu jj chezmoi btm procs tldr \
+         tree-sitter yazi ya cargo-binstall zoxide bat fzf; do
+  command -v "$c" >/dev/null || { echo "MISSING on PATH: $c" >&2; exit 1; }
+done
+nvim --version | head -1
+cargo-binstall -V  # cargo-binstall uses --version for the crate; -V prints its own
 EOF
 
 # ---------------------------------------------------------------------------
@@ -234,10 +115,10 @@ ENV RUSTUP_HOME=/home/exedev/.rustup CARGO_HOME=/home/exedev/.cargo
 USER exedev
 RUN <<'EOF'
 set -euxo pipefail
-case "${TARGETARCH}" in
-  amd64) RUST_HOST="x86_64-unknown-linux-gnu" ;;
-  arm64) RUST_HOST="aarch64-unknown-linux-gnu" ;;
-  *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;;
+case "$(uname -m)" in
+  x86_64)  RUST_HOST="x86_64-unknown-linux-gnu" ;;
+  aarch64) RUST_HOST="aarch64-unknown-linux-gnu" ;;
+  *) echo "Unsupported arch: $(uname -m)" >&2; exit 1 ;;
 esac
 tmp="$(mktemp -d)"
 trap 'rm -rf "${tmp}"' EXIT

@@ -38,10 +38,14 @@ inherited from `exeuntu`):
 The image should contain exactly the tools that `scripts/setup-exedev.sh` in the
 dotfiles repo installs, and **only those not already in `exeuntu`**. As of now:
 
-- apt: `zoxide`, `bat` (symlinked from `batcat`), `zsh`, `fzf`
-- GitHub releases: `btm` (bottom), `jj`, `mise`, `chezmoi`, `zellij`, `yazi`+`ya`,
-  `eza`, `starship`, `nu` (nushell), `cargo-binstall`, `nvim` (current Neovim),
-  `tree-sitter` (CLI), `procs` (modern `ps`), `tldr` (tealdeer)
+- apt: `zsh` only (installed, not made the login shell — the dotfiles own that).
+- GitHub-release CLI tools, installed **declaratively via mise** from the
+  [`image-tools.toml`](image-tools.toml) manifest: `nvim` (current Neovim),
+  `zellij`, `eza`, `starship`, `nu` (nushell), `jj`, `chezmoi`, `btm` (bottom),
+  `procs`, `tldr` (tealdeer), `tree-sitter`, `yazi`+`ya`, `cargo-binstall`,
+  `zoxide`, `bat`, `fzf`. `mise` itself is bootstrapped from its GitHub release
+  first (it can't install itself) and stays on `PATH` for the dotfiles' `mise
+activate`. See [How tools are installed](#how-tools-are-installed) below.
 - `fd`: already in the base but only at pi's private `~/.pi/agent/bin/fd` (off
   `PATH`). Symlinked onto `PATH` — the dotfiles assume `fd` is callable
   (`FZF_DEFAULT_COMMAND`, the `vv`/`zjw` helpers, the chezmoi run-scripts).
@@ -59,9 +63,9 @@ dotfiles repo installs, and **only those not already in `exeuntu`**. As of now:
   `cargo-binstall <crate>` (toolchain-free) — the `cargo binstall …` subcommand
   form needs a default toolchain set.
 
-No `curl | bash` of external install scripts — pull the download logic into the
-Dockerfile (resolve the release, fetch the binary, install it), like every
-other GitHub-release tool.
+No `curl | bash` of external install scripts. Tools go on the
+[`image-tools.toml`](image-tools.toml) mise manifest (declarative); the only
+direct download left is the mise binary itself (bootstrap).
 
 `zsh` is installed but not set as the login shell (the dotfiles own that via
 `chsh`/`.zshrc`). `nu` is a secondary structured-data shell, not a login shell
@@ -75,25 +79,40 @@ deliberate exceptions: we bake a **current** `neovim` (the base's apt one is too
 old for the dotfiles' config) that shadows the base on `PATH`, and we symlink
 the base's `fd` onto `PATH` (it ships only at pi's private path).
 
-If `setup-exedev.sh` changes in the dotfiles repo, mirror the change here.
+This image owns **tool install**; the dotfiles own **config** (neovim config,
+`.zshrc`, etc.) applied by a lightweight startup `chezmoi apply` that no longer
+installs these tools. The mise manifest mirrors the CLI subset of the dotfiles'
+Brewfile — keep the two aligned when either moves.
 
 The image also pre-creates `~/workplace` (owned by `exedev`) — the personal
 directory convention for checking out projects. Keep it.
 
-Notes:
+### How tools are installed
 
-- The image is **multi-arch** (`linux/amd64`, `linux/arm64`). Use `TARGETARCH`
-  (provided by buildx) for arch-specific download URLs; don't hardcode x86_64.
-- GitHub-release tool versions resolve to **latest at build time**, so the
-  weekly scheduled rebuild keeps them fresh. The in-Dockerfile GitHub API calls
-  use the `github_token` BuildKit secret (never baked into a layer) to dodge the
+The [`image-tools.toml`](image-tools.toml) manifest is the single source of
+truth. It's `COPY`d to `/etc/mise/config.toml`; `mise install` fetches every
+tool, then the resolved binaries are symlinked onto `/usr/local/bin` (real
+binaries, so root / systemd / non-login shells need no `mise activate`).
+
+- **No arch table.** mise resolves the host arch itself, and the image builds
+  natively per-arch, so there's no `TARGETARCH` mapping — the same manifest and
+  the same symlink loop run unchanged on amd64 and arm64. (Only the mise and
+  rustup-init bootstraps still branch on `uname -m`.)
+- **Backends:** `aqua` where available (curated, checksum-verified, prebuilt),
+  `ubi` for the few tools aqua lacks (e.g. `eza`). Neither compiles from source.
+- **Versions** are `latest`, resolved at build, so the weekly scheduled rebuild
+  keeps them fresh. aqua/ubi and the mise bootstrap read the `github_token`
+  BuildKit secret via `GITHUB_TOKEN` (never baked into a layer) to dodge the
   unauthenticated rate limit.
-- `mise`'s tarball is `mise/bin/mise`; the others extract the binary at the top
-  level (or under `yazi-<triple>/`). The newer additions vary: `nvim` unpacks a
-  full `bin/`+`lib/`+`share/` tree that's copied wholesale into `/usr/local`
-  (so `share/nvim/runtime` is found); `tree-sitter` ships a single gzipped
-  binary (`gunzip`, no tar); `procs` is a zip whose filename embeds the version;
-  `tldr` (tealdeer) is a bare binary (no archive).
+- **PATH quirks handled by the symlink loop:** renamed commands (`nvim`, `btm`,
+  `tldr`, `nu`) and multi-binary packages (yazi's `ya`) are picked up
+  automatically from `mise bin-paths`. `nvim` is additionally symlinked over the
+  base's apt `nvim` in `/usr/bin` (which isn't guaranteed to sit after
+  `/usr/local/bin` on `PATH`); it finds its runtime relative to the resolved
+  binary.
+- **Adding a tool:** add one line to `image-tools.toml`. Find its backend id
+  with `mise registry <name>` (prefer the `aqua:` entry; fall back to
+  `ubi:<owner>/<repo>`).
 
 ## Staying in sync with upstream exeuntu
 

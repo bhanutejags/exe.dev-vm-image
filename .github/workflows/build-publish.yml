@@ -21,10 +21,12 @@ on:
     branches: [main]
     paths:
       - "Dockerfile"
+      - "image-tools.toml"
       - ".github/workflows/build-publish.yml"
   pull_request:
     paths:
       - "Dockerfile"
+      - "image-tools.toml"
       - ".github/workflows/build-publish.yml"
   workflow_dispatch:
   schedule:

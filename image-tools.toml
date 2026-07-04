@@ -1,0 +1,37 @@
+# mise tool manifest for the exe.dev VM image — the single source of truth for the
+# GitHub-release CLI tools this image bakes. Consumed at BUILD time by `mise install`
+# (see the Dockerfile); the resolved binaries are symlinked onto /usr/local/bin.
+#
+# Why this file exists: it replaces ~150 lines of hand-rolled per-tool curl/tar/unzip
+# blocks plus a per-tool TARGETARCH naming table. One uniform backend, one line per tool.
+#
+# Backend: `github:` — mise's native GitHub-release installer. It auto-detects the host
+# OS/arch/libc and scores the best release asset (the image builds natively per-arch, so
+# there is no arch-specific code here at all). Prefer it over `ubi:` (deprecated) and over
+# `aqua:` (whose curated registry is missing arm64-linux assets for some of these tools,
+# e.g. procs). Versions are "latest", resolved at build — the weekly rebuild keeps them
+# fresh. Add `mise.lock` later if you want pinned checksums.
+#
+# This mirrors the CLI subset of the dotfiles' Brewfile. The image owns TOOL INSTALL;
+# the dotfiles own CONFIG (see CLAUDE.md). Keep the two lists aligned when either moves.
+#
+# Command-name note: every tool's binary matches its command EXCEPT tealdeer, whose
+# binary is `tealdeer` — the Dockerfile adds a `tldr` alias symlink for it.
+
+[tools]
+"github:neovim/neovim"             = "latest" # nvim — current release (dotfiles config needs it)
+"github:zellij-org/zellij"         = "latest"
+"github:eza-community/eza"         = "latest"
+"github:starship/starship"         = "latest"
+"github:nushell/nushell"           = "latest" # nu — secondary structured-data shell
+"github:jj-vcs/jj"                 = "latest"
+"github:twpayne/chezmoi"           = "latest"
+"github:ClementTsang/bottom"       = "latest" # btm
+"github:dalance/procs"             = "latest"
+"github:tealdeer-rs/tealdeer"      = "latest" # binary is `tealdeer`; aliased to `tldr`
+"github:tree-sitter/tree-sitter"   = "latest"
+"github:sxyazi/yazi"               = "latest" # ships both yazi and the `ya` helper
+"github:cargo-bins/cargo-binstall" = "latest"
+"github:ajeetdsouza/zoxide"        = "latest"
+"github:sharkdp/bat"               = "latest"
+"github:junegunn/fzf"              = "latest"
