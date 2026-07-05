@@ -16,9 +16,11 @@ See [exe.dev customization docs](https://exe.dev/docs/customization).
 
 ```
 Dockerfile                          # the custom image (FROM exeuntu, pinned by digest)
+image-tools.toml                    # declarative mise manifest — the tools we bake
 .github/workflows/build-publish.yml # multi-arch buildx build + push to GHCR
 .github/dependabot.yml              # base-image digest + GitHub Actions updates
 README.md                           # user-facing docs
+docs/design.md                      # why the tooling layer works the way it does
 ```
 
 ## The exe.dev image contract — do not break these
