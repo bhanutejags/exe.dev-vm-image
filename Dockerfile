@@ -77,26 +77,42 @@ install -m 0755 "${tmp}/mise/bin/mise" /usr/local/bin/mise
 mise install --yes
 
 # --- expose the resolved binaries on the system PATH ---
-# Symlink every executable in each tool's bin dir onto /usr/local/bin (real
-# binaries, so root / systemd / non-login shells need no `mise activate`). Plain
-# bash glob, not find, so it's independent of the base's find flavour. Covers
-# renamed commands (nvim/btm/nu) and multi-binary packages (yazi's `ya`) with no
-# per-tool mapping. nvim finds its runtime relative to the resolved binary.
+# Symlink every executable in each tool's bin dir into BOTH /usr/local/bin and
+# /usr/bin. Why both: on exe.dev VMs the login PATH puts /usr/local/bin *last*
+# (after /usr/bin), so a base-image copy of a tool (nvim, btm, zoxide all ship
+# in /usr/bin) would shadow ours. Symlinking into /usr/bin makes our current
+# version win in every context — login, non-login, systemd — generalising what
+# used to be an nvim-only override. Real binaries, so no `mise activate` needed.
+# Plain bash glob (not find, whose flags vary); covers renamed commands
+# (nvim/btm/nu) and multi-binary packages (yazi's `ya`) with no per-tool mapping.
 for d in $(mise bin-paths); do
   for f in "$d"/*; do
-    [ -f "$f" ] && [ -x "$f" ] && ln -sf "$f" /usr/local/bin/
+    if [ -f "$f" ] && [ -x "$f" ]; then
+      ln -sf "$f" /usr/local/bin/
+      ln -sf "$f" /usr/bin/
+    fi
   done
 done
 # tealdeer's binary is `tealdeer`; the dotfiles (and everyone) call it `tldr`.
-ln -sf "$(command -v tealdeer)" /usr/local/bin/tldr
-# nvim must beat the base's apt nvim regardless of /usr/local/bin PATH order.
-ln -sf "$(mise which nvim)" /usr/bin/nvim
+TEALDEER="$(mise which tealdeer)"
+ln -sf "${TEALDEER}" /usr/local/bin/tldr
+ln -sf "${TEALDEER}" /usr/bin/tldr
 
 # --- smoke-test everything ---
 mise ls --installed
 for c in zsh nvim zellij eza starship nu jj chezmoi btm procs tldr \
          tree-sitter yazi ya cargo-binstall zoxide bat fzf; do
   command -v "$c" >/dev/null || { echo "MISSING on PATH: $c" >&2; exit 1; }
+done
+# Guard the shadowing bug directly: for tools the base also ships in /usr/bin,
+# assert /usr/bin/<cmd> now resolves to OUR mise build (a build-shell PATH check
+# would miss this — it finds /usr/local/bin first, unlike the exe.dev VM PATH).
+for c in nvim btm zoxide tldr; do
+  tgt="$(readlink -f "/usr/bin/${c}")"
+  case "${tgt}" in
+    "${MISE_DATA_DIR}"/*) ;;
+    *) echo "SHADOW: /usr/bin/${c} -> ${tgt} (not our mise build)" >&2; exit 1 ;;
+  esac
 done
 nvim --version | head -1
 cargo-binstall -V  # cargo-binstall uses --version for the crate; -V prints its own

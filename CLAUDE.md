@@ -101,18 +101,22 @@ binaries, so root / systemd / non-login shells need no `mise activate`).
 - **Backends:** `aqua` where available (curated, checksum-verified, prebuilt),
   `ubi` for the few tools aqua lacks (e.g. `eza`). Neither compiles from source.
 - **Versions** are `latest`, resolved at build, so the weekly scheduled rebuild
-  keeps them fresh. aqua/ubi and the mise bootstrap read the `github_token`
-  BuildKit secret via `GITHUB_TOKEN` (never baked into a layer) to dodge the
-  unauthenticated rate limit.
-- **PATH quirks handled by the symlink loop:** renamed commands (`nvim`, `btm`,
-  `tldr`, `nu`) and multi-binary packages (yazi's `ya`) are picked up
-  automatically from `mise bin-paths`. `nvim` is additionally symlinked over the
-  base's apt `nvim` in `/usr/bin` (which isn't guaranteed to sit after
-  `/usr/local/bin` on `PATH`); it finds its runtime relative to the resolved
-  binary.
+  keeps them fresh. The github backend and the mise bootstrap read the
+  `github_token` BuildKit secret via `GITHUB_TOKEN` (never baked into a layer) to
+  dodge the unauthenticated rate limit.
+- **PATH / shadowing:** the symlink loop links every tool into **both**
+  `/usr/local/bin` and `/usr/bin`. On exe.dev VMs the login `PATH` puts
+  `/usr/local/bin` _last_ (after `/usr/bin`), so a base-image copy of a tool
+  shadows ours unless we also land in `/usr/bin` — the base ships `nvim`, `btm`,
+  and `zoxide` there, so `/usr/local/bin` alone silently serves the base's older
+  versions. A build-time assertion checks `/usr/bin/<cmd>` resolves into
+  `MISE_DATA_DIR` for those dupes (a plain `command -v` check can't catch it: the
+  build shell puts `/usr/local/bin` first, unlike the VM). Renamed commands
+  (`nvim`/`btm`/`nu`) and multi-binary packages (yazi's `ya`) are picked up
+  automatically from `mise bin-paths`.
 - **Adding a tool:** add one line to `image-tools.toml`. Find its backend id
-  with `mise registry <name>` (prefer the `aqua:` entry; fall back to
-  `ubi:<owner>/<repo>`).
+  with `mise registry <name>` and use the `github:<owner>/<repo>` form (uniform,
+  arm64-safe, not deprecated like `ubi:`).
 
 ## Staying in sync with upstream exeuntu
 
