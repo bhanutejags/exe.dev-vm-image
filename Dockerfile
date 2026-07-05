@@ -77,26 +77,25 @@ install -m 0755 "${tmp}/mise/bin/mise" /usr/local/bin/mise
 mise install --yes
 
 # --- expose the resolved binaries on the system PATH ---
-# Symlink every executable in each tool's bin dir into BOTH /usr/local/bin and
-# /usr/bin. Why both: on exe.dev VMs the login PATH puts /usr/local/bin *last*
-# (after /usr/bin), so a base-image copy of a tool (nvim, btm, zoxide all ship
-# in /usr/bin) would shadow ours. Symlinking into /usr/bin makes our current
-# version win in every context — login, non-login, systemd — generalising what
-# used to be an nvim-only override. Real binaries, so no `mise activate` needed.
-# Plain bash glob (not find, whose flags vary); covers renamed commands
-# (nvim/btm/nu) and multi-binary packages (yazi's `ya`) with no per-tool mapping.
+# Symlink every executable in each tool's bin dir onto /usr/local/bin (real
+# binaries, so root / systemd / non-login shells need no `mise activate`). Plain
+# bash glob (not find, whose flags vary); covers renamed commands (btm/nu) and
+# multi-binary packages (yazi's `ya`) with no per-tool mapping.
 for d in $(mise bin-paths); do
   for f in "$d"/*; do
-    if [ -f "$f" ] && [ -x "$f" ]; then
-      ln -sf "$f" /usr/local/bin/
-      ln -sf "$f" /usr/bin/
-    fi
+    [ -f "$f" ] && [ -x "$f" ] && ln -sf "$f" /usr/local/bin/
   done
 done
 # tealdeer's binary is `tealdeer`; the dotfiles (and everyone) call it `tldr`.
-TEALDEER="$(mise which tealdeer)"
-ln -sf "${TEALDEER}" /usr/local/bin/tldr
-ln -sf "${TEALDEER}" /usr/bin/tldr
+ln -sf "$(mise which tealdeer)" /usr/local/bin/tldr
+# nvim is the one real in-image shadow: the base ships an old nvim (0.9.x) in
+# /usr/bin, which sits *earlier* than /usr/local/bin on exe.dev's PATH. Symlink
+# ours over it so the current Neovim the dotfiles' config needs always wins.
+# (btm/zoxide are NOT overridden here: the base ships neither — the older copies
+# seen on a VM come from exe.dev's own provisioning, which lands on top of this
+# image, so fighting them here is futile. The dotfiles' brew provides current
+# ones on apply.)
+ln -sf "$(mise which nvim)" /usr/bin/nvim
 
 # --- smoke-test everything ---
 mise ls --installed
@@ -104,16 +103,12 @@ for c in zsh nvim zellij eza starship nu jj chezmoi btm procs tldr \
          tree-sitter yazi ya cargo-binstall zoxide bat fzf; do
   command -v "$c" >/dev/null || { echo "MISSING on PATH: $c" >&2; exit 1; }
 done
-# Guard the shadowing bug directly: for tools the base also ships in /usr/bin,
-# assert /usr/bin/<cmd> now resolves to OUR mise build (a build-shell PATH check
-# would miss this — it finds /usr/local/bin first, unlike the exe.dev VM PATH).
-for c in nvim btm zoxide tldr; do
-  tgt="$(readlink -f "/usr/bin/${c}")"
-  case "${tgt}" in
-    "${MISE_DATA_DIR}"/*) ;;
-    *) echo "SHADOW: /usr/bin/${c} -> ${tgt} (not our mise build)" >&2; exit 1 ;;
-  esac
-done
+# Assert the nvim override resolves to OUR mise build (a plain command -v can't
+# catch this — the build shell puts /usr/local/bin first, unlike the exe.dev VM).
+case "$(readlink -f /usr/bin/nvim)" in
+  "${MISE_DATA_DIR}"/*) ;;
+  *) echo "nvim override failed: $(readlink -f /usr/bin/nvim)" >&2; exit 1 ;;
+esac
 nvim --version | head -1
 cargo-binstall -V  # cargo-binstall uses --version for the crate; -V prints its own
 EOF
@@ -152,12 +147,13 @@ RUN ln -sf "${CARGO_HOME}"/bin/* /usr/local/bin/
 #    is NOT on the global PATH. The dotfiles assume `fd` is callable
 #    (FZF_DEFAULT_COMMAND, the vv/zjw helpers, the chezmoi run-scripts), so
 #    symlink the existing binary onto PATH rather than downloading a second
-#    copy. (Depends on the base keeping that path; a move would surface as a
-#    build-time failure of the smoke test below, not a silent breakage.)
+#    copy. The `test -x` guard fails the build if the base ever moves or drops
+#    fd, rather than leaving a silent dangling symlink. (No /usr/bin copy needed:
+#    the base ships no fd on PATH, so nothing shadows /usr/local/bin/fd — unlike
+#    nvim, which the base does ship in /usr/bin.)
 # ---------------------------------------------------------------------------
 RUN test -x /home/exedev/.pi/agent/bin/fd && \
-    ln -sf /home/exedev/.pi/agent/bin/fd /usr/local/bin/fd && \
-    fd --version
+    ln -sf /home/exedev/.pi/agent/bin/fd /usr/local/bin/fd
 
 # ---------------------------------------------------------------------------
 # 5. Shell framework: oh-my-zsh + the zsh plugins the dotfiles' .zshrc sources.

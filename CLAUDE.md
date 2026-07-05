@@ -104,16 +104,17 @@ binaries, so root / systemd / non-login shells need no `mise activate`).
   keeps them fresh. The github backend and the mise bootstrap read the
   `github_token` BuildKit secret via `GITHUB_TOKEN` (never baked into a layer) to
   dodge the unauthenticated rate limit.
-- **PATH / shadowing:** the symlink loop links every tool into **both**
-  `/usr/local/bin` and `/usr/bin`. On exe.dev VMs the login `PATH` puts
-  `/usr/local/bin` _last_ (after `/usr/bin`), so a base-image copy of a tool
-  shadows ours unless we also land in `/usr/bin` — the base ships `nvim`, `btm`,
-  and `zoxide` there, so `/usr/local/bin` alone silently serves the base's older
-  versions. A build-time assertion checks `/usr/bin/<cmd>` resolves into
-  `MISE_DATA_DIR` for those dupes (a plain `command -v` check can't catch it: the
-  build shell puts `/usr/local/bin` first, unlike the VM). Renamed commands
-  (`nvim`/`btm`/`nu`) and multi-binary packages (yazi's `ya`) are picked up
-  automatically from `mise bin-paths`.
+- **PATH / shadowing:** the symlink loop links every tool onto `/usr/local/bin`;
+  renamed commands (`btm`/`nu`) and multi-binary packages (yazi's `ya`) are picked
+  up automatically from `mise bin-paths`. On exe.dev VMs the login `PATH` puts
+  `/usr/local/bin` _last_ (after `/usr/bin`), so anything earlier in `/usr/bin`
+  wins. Only **`nvim`** is a real in-image shadow — the base ships an old `nvim`
+  (0.9.x) in `/usr/bin`, so we symlink ours over it (with a build-time assertion
+  that `/usr/bin/nvim` resolves into `MISE_DATA_DIR`; a plain `command -v` check
+  can't catch it, since the build shell puts `/usr/local/bin` first). `btm`/`zoxide`
+  are **not** overridden: the base ships neither — the older copies seen on a VM
+  come from **exe.dev's own provisioning** (layered on top of this image), so
+  fighting them here is futile; the dotfiles' brew provides current ones on apply.
 - **Adding a tool:** add one line to `image-tools.toml`. Find its backend id
   with `mise registry <name>` and use the `github:<owner>/<repo>` form (uniform,
   arm64-safe, not deprecated like `ubi:`).
