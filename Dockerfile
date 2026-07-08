@@ -3,7 +3,7 @@
 # Custom exe.dev VM image: the exeuntu base plus extra developer CLI tools.
 # Base is pinned by digest; Dependabot bumps it. Re-pin by hand with:
 #   docker buildx imagetools inspect ghcr.io/boldsoftware/exeuntu:latest
-FROM ghcr.io/boldsoftware/exeuntu:latest@sha256:034721bc6e024074745d29588d7a287a2f8004d3476014bdd2f6b67fe4272aa6
+FROM ghcr.io/boldsoftware/exeuntu:latest@sha256:d77236e6f434a229cb9d9ae3c1b61dd8795db83dc42b365f679e100af4983b64
 
 # Most of the install steps below run as root (apt + binaries into /usr/local).
 # The base image leaves USER=root before its CMD, so we are already root here,
