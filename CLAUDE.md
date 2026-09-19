@@ -29,6 +29,7 @@ When editing the `Dockerfile`, preserve everything exe.dev relies on (all
 inherited from `exeuntu`):
 
 - **`LABEL "exe.dev/login-user"="exedev"`** — exe.dev logs you in as `exedev`.
+- **`LABEL "exe.dev/install-shelley"="true"`** — exe.dev installs Shelley when creating the VM.
 - **`CMD ["/usr/local/bin/init"]`** — the systemd init wrapper.
 - **`USER root` at the end** — the container entrypoint (systemd) must run as
   root. The login user is controlled by the label above, **not** the container

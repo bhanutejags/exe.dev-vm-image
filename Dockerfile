@@ -3,7 +3,7 @@
 # Custom exe.dev VM image: the exeuntu base plus extra developer CLI tools.
 # Base is pinned by digest; Dependabot bumps it. Re-pin by hand with:
 #   docker buildx imagetools inspect ghcr.io/boldsoftware/exeuntu:latest
-FROM ghcr.io/boldsoftware/exeuntu:latest@sha256:034721bc6e024074745d29588d7a287a2f8004d3476014bdd2f6b67fe4272aa6
+FROM ghcr.io/boldsoftware/exeuntu:latest@sha256:db07024c8dd2fb9dcb1a72216ccf3a600d256e0a80d54847381468f54707d131
 
 # Most of the install steps below run as root (apt + binaries into /usr/local).
 # The base image leaves USER=root before its CMD, so we are already root here,
@@ -188,6 +188,7 @@ RUN install -d -o exedev -g exedev -m 0755 /home/exedev/workplace
 LABEL org.opencontainers.image.source="https://github.com/bhanutejags/exe.dev-vm-image"
 LABEL org.opencontainers.image.description="Custom exe.dev VM image (exeuntu + personal dev tooling)"
 LABEL "exe.dev/login-user"="exedev"
+LABEL "exe.dev/install-shelley"="true"
 
 # The container entrypoint is systemd (via /usr/local/bin/init) and must run as
 # root, exactly like the base image. Interactive logins land as `exedev` because

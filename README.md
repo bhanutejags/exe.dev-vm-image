@@ -47,7 +47,8 @@ ssh exe.dev new --image=ghcr.io/bhanutejags/exe.dev-vm-image:latest
 ```
 
 The GHCR package must be **public** for exe.dev to pull it (otherwise pass
-`--registry-auth USER:PASSWORD`).
+`--registry-auth USER:PASSWORD`). The image opts into exe.dev's native Shelley
+installation, so new VMs receive the current Shelley automatically.
 
 ## Staying in sync with `exeuntu`
 
